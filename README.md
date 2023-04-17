@@ -26,5 +26,5 @@ Reflection.invoke(obj, "name", args);
 Reflection.invokeStatic(class, "name", args);
 ```
 
-# refer
+# reference link
 > https://lovesykun.cn/archives/android-hidden-api-bypass.html
