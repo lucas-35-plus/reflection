@@ -34,7 +34,6 @@ public class MainActivity extends Activity {
         Log.e("test", "test() " + Reflection.invokeStatic(MainActivity.class, "test"));
         Reflection.set(MainActivity.this, "mTestInt", 7);
         Log.e("test", "test1() " + Reflection.invoke(this, "test1"));
-
     }
 
     private int mTestInt = 6;
