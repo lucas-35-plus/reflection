@@ -141,4 +141,44 @@ public class Reflection {
 
         return null;
     }
+
+    //********************************************************************
+    // Reflect
+    //********************************************************************
+    public static Field field(Class cls, String name) {
+        while (cls != null) {
+            for (Field tmp : cls.getDeclaredFields()) {
+                if (tmp.getName().equals(name)) {
+                    try {
+                        tmp.setAccessible(true);
+                        return tmp;
+                    } catch (Throwable t) {
+                        t.printStackTrace();
+                    }
+                }
+            }
+            cls = cls.getSuperclass();
+        }
+
+        return null;
+    }
+
+    public static Method method(Class cls, String name, Class... params) {
+        while (cls != null) {
+            for (Method tmp : cls.getDeclaredMethods()) {
+                if (tmp.getName().equals(name) && tmp.getParameterTypes().length == params.length) {
+                    try {
+                        tmp.setAccessible(true);
+                        return tmp;
+                    } catch (Throwable t) {
+                        t.printStackTrace();
+                    }
+
+                    return null;
+                }
+            }
+        }
+
+        return null;
+    }
 }
