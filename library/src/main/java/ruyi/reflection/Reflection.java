@@ -1,5 +1,6 @@
 package ruyi.reflection;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -95,7 +96,6 @@ public class Reflection {
             }
             clazz = clazz.getSuperclass();
         }
-
     }
 
     //********************************************************************
@@ -121,16 +121,20 @@ public class Reflection {
         int argsL = args == null ? 0 : args.length;
         while (clazz != null) {
             for (Method tmp : clazz.getDeclaredMethods()) {
-                if (tmp.getName().equals(name) && tmp.getParameterTypes().length == argsL) {
-                    try {
-                        tmp.setAccessible(true);
-                        if (Modifier.isStatic(tmp.getModifiers())) {
-                            return (T) tmp.invoke(clazz, args);
-                        } else {
-                            return (T) tmp.invoke(obj, args);
+                if (tmp.getName().equals(name)) {
+                    Class[] paramTypes = tmp.getParameterTypes();
+                    int paramLen = paramTypes == null ? 0 : paramTypes.length;
+                    if (paramLen == argsL) {
+                        try {
+                            tmp.setAccessible(true);
+                            if (Modifier.isStatic(tmp.getModifiers())) {
+                                return (T) tmp.invoke(clazz, args);
+                            } else {
+                                return (T) tmp.invoke(obj, args);
+                            }
+                        } catch (Throwable t) {
+                            t.printStackTrace();
                         }
-                    } catch (Throwable t) {
-                        t.printStackTrace();
                     }
 
                     return null;
@@ -145,6 +149,27 @@ public class Reflection {
     //********************************************************************
     // Reflect
     //********************************************************************
+    public static <T> T newInstance(Class<T> cls, Object...args) {
+        if (cls == null) {
+            return null;
+        }
+
+        int argsLen = args == null ? 0 : args.length;
+        for (Constructor constructor : cls.getDeclaredConstructors()) {
+            Class[] paramTypes = constructor.getParameterTypes();
+            int paramLen = paramTypes == null ? 0 : paramTypes.length;
+            if (paramLen== argsLen) {
+                try {
+                    return (T) constructor.newInstance(args);
+                } catch (Throwable t) {
+                    t.printStackTrace();
+                }
+            }
+        }
+
+        return null;
+    }
+
     public static Field field(Class cls, String name) {
         while (cls != null) {
             for (Field tmp : cls.getDeclaredFields()) {
@@ -164,14 +189,19 @@ public class Reflection {
     }
 
     public static Method method(Class cls, String name, Class... params) {
+        int argsLen = params == null ? 0 : params.length;
         while (cls != null) {
             for (Method tmp : cls.getDeclaredMethods()) {
-                if (tmp.getName().equals(name) && tmp.getParameterTypes().length == params.length) {
-                    try {
-                        tmp.setAccessible(true);
-                        return tmp;
-                    } catch (Throwable t) {
-                        t.printStackTrace();
+                if (tmp.getName().equals(name)) {
+                    Class[] paramTypes = tmp.getParameterTypes();
+                    int paramLen = paramTypes == null ? 0 : paramTypes.length;
+                    if (paramLen == argsLen) {
+                        try {
+                            tmp.setAccessible(true);
+                            return tmp;
+                        } catch (Throwable t) {
+                            t.printStackTrace();
+                        }
                     }
 
                     return null;
