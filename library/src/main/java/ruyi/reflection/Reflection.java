@@ -136,8 +136,6 @@ public class Reflection {
                             t.printStackTrace();
                         }
                     }
-
-                    return null;
                 }
             }
             clazz = clazz.getSuperclass();
@@ -202,9 +200,8 @@ public class Reflection {
                         } catch (Throwable t) {
                             t.printStackTrace();
                         }
+                        return null;
                     }
-
-                    return null;
                 }
             }
         }
