@@ -21,7 +21,7 @@ class ByPasser {
 
     // methods地址开始，需要再偏移一段地址大小才能得到第一个method的地址
     // methodsOffst + methodsAddrOffset = 第一个ArtMethod的地址
-    private static long sMethodsAddrOffset;
+    private static long sArtMethodsAddrOffset;
     // ArtMethod 结构体大小
     private static long sArtMethodSize;
 
@@ -51,8 +51,24 @@ class ByPasser {
                 long mbAddr = unsafe.getLong(mb, sArtFieldOrMethodOffset);
                 long methods = unsafe.getLong(NeverUse.getCaller(), sMethodsOffset);
                 sArtMethodSize = mbAddr - maAddr;
-                // 为什么多减1个？因为还有个默认的无参构造函数，他肯定是排在a方法前面的，所有要再减1个
-                sMethodsAddrOffset = maAddr - methods - sArtMethodSize;
+                /*
+                 * methods 对应的数据结构
+                 * template<typename T> class LengthPrefixedArray {
+                 *     uint32_t size_;
+                 *     uint8_t data_[0];
+                 * };
+                 *
+                 * data_ 就是ArtMethod数组，怎么得到这个地址呢
+                 * 按照内存排序，将指针从 LengthPrefixedArray 首地址加上 sizeof(size_) 就得到 data_ 的数组地址了
+                 *
+                 * maAddr 是模拟的第一个方法的地址
+                 * methods 是模拟的 LengthPrefixedArray 的地址
+                 *
+                 * 为什么要多减1个sArtMethodSize，模拟的类还有个默认构造函数，也是ArtMethod，所以要减掉
+                 * maAddr - methods - sArtMethodSize;
+                 * 通过如上方法就得到 sizeof(size_) 的大小了，这里这么算是为了兼容 32/64 不需要指定值，按照系统的内存排序得到偏移大小
+                 */
+                sArtMethodsAddrOffset = maAddr - methods - sArtMethodSize;
 
                 sInfoOffset = unsafe.objectFieldOffset(
                         NeverUse.getMethodHandleImpl(sdkInt).getDeclaredField("info"));
@@ -131,7 +147,7 @@ class ByPasser {
             int methodsCount = unsafe.getInt(clsMethodsOffset);
             for (int i = 0; i < methodsCount; i++) {
                 try {
-                    long artMethodAddress = clsMethodsOffset + sMethodsAddrOffset + i * sArtMethodSize;
+                    long artMethodAddress = clsMethodsOffset + sArtMethodsAddrOffset + i * sArtMethodSize;
                     unsafe.putLong(mh, sArtFieldOrMethodOffset, artMethodAddress);
                     unsafe.putObject(mh, sInfoOffset, null);
 
