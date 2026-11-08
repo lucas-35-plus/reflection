@@ -33,29 +33,14 @@ public class Reflection {
     }
 
     private static <T> T get(Class clazz, Object obj, String name) {
-        if (clazz == null || name == null) {
-            return null;
-        }
-
-        while (clazz != null) {
-            for (Field tmp : clazz.getDeclaredFields()) {
-                if (tmp.getName().equals(name)) {
-                    try {
-                        tmp.setAccessible(true);
-                        if (Modifier.isStatic(tmp.getModifiers())) {
-                            return (T) tmp.get(clazz);
-                        } else {
-                            return (T) tmp.get(obj);
-                        }
-                    } catch (Throwable t) {
-                        t.printStackTrace();
-                    }
-                    return null;
-                }
+        Field field = field(clazz, name);
+        if (field != null) {
+            try {
+                return (T) field.get(obj);
+            } catch (Throwable t) {
+                t.printStackTrace();
             }
-            clazz = clazz.getSuperclass();
         }
-
         return null;
     }
 
@@ -74,27 +59,13 @@ public class Reflection {
     }
 
     private static void set(Class clazz, Object obj, String name, Object value) {
-        if (clazz == null || name == null) {
-            return;
-        }
-
-        while (clazz != null) {
-            for (Field tmp : clazz.getDeclaredFields()) {
-                if (tmp.getName().equals(name)) {
-                    try {
-                        tmp.setAccessible(true);
-                        if (Modifier.isStatic(tmp.getModifiers())) {
-                            tmp.set(clazz, value);
-                        } else {
-                            tmp.set(obj, value);
-                        }
-                    } catch (Throwable t) {
-                        t.printStackTrace();
-                    }
-                    return;
-                }
+        Field field = field(clazz, name);
+        if (field != null) {
+            try {
+                field.set(obj, value);
+            } catch (Throwable t) {
+                t.printStackTrace();
             }
-            clazz = clazz.getSuperclass();
         }
     }
 
@@ -119,26 +90,35 @@ public class Reflection {
         }
 
         int argsL = args == null ? 0 : args.length;
-        while (clazz != null) {
-            for (Method tmp : clazz.getDeclaredMethods()) {
-                if (tmp.getName().equals(name)) {
-                    Class[] paramTypes = tmp.getParameterTypes();
-                    int paramLen = paramTypes == null ? 0 : paramTypes.length;
-                    if (paramLen == argsL) {
-                        try {
-                            tmp.setAccessible(true);
-                            if (Modifier.isStatic(tmp.getModifiers())) {
-                                return (T) tmp.invoke(clazz, args);
-                            } else {
-                                return (T) tmp.invoke(obj, args);
+        for (int attempt = 0; attempt < 2; attempt++) {
+            boolean found = false;
+            Class current = clazz;
+            while (current != null) {
+                for (Method tmp : current.getDeclaredMethods()) {
+                    if (tmp.getName().equals(name)) {
+                        Class[] paramTypes = tmp.getParameterTypes();
+                        int paramLen = paramTypes == null ? 0 : paramTypes.length;
+                        if (paramLen == argsL) {
+                            found = true;
+                            try {
+                                tmp.setAccessible(true);
+                                if (Modifier.isStatic(tmp.getModifiers())) {
+                                    return (T) tmp.invoke(clazz, args);
+                                } else {
+                                    return (T) tmp.invoke(obj, args);
+                                }
+                            } catch (Throwable t) {
+                                t.printStackTrace();
                             }
-                        } catch (Throwable t) {
-                            t.printStackTrace();
                         }
                     }
                 }
+                current = current.getSuperclass();
             }
-            clazz = clazz.getSuperclass();
+            // 仅查找失败才恢复豁免重试，不能因业务异常再次执行方法。
+            if (found || attempt != 0 || !ByPasser.restore()) {
+                break;
+            }
         }
 
         return null;
@@ -153,15 +133,22 @@ public class Reflection {
         }
 
         int argsLen = args == null ? 0 : args.length;
-        for (Constructor constructor : cls.getDeclaredConstructors()) {
-            Class[] paramTypes = constructor.getParameterTypes();
-            int paramLen = paramTypes == null ? 0 : paramTypes.length;
-            if (paramLen== argsLen) {
-                try {
-                    return (T) constructor.newInstance(args);
-                } catch (Throwable t) {
-                    t.printStackTrace();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            boolean found = false;
+            for (Constructor constructor : cls.getDeclaredConstructors()) {
+                Class[] paramTypes = constructor.getParameterTypes();
+                int paramLen = paramTypes == null ? 0 : paramTypes.length;
+                if (paramLen == argsLen) {
+                    found = true;
+                    try {
+                        return (T) constructor.newInstance(args);
+                    } catch (Throwable t) {
+                        t.printStackTrace();
+                    }
                 }
+            }
+            if (found || attempt != 0 || !ByPasser.restore()) {
+                break;
             }
         }
 
@@ -169,43 +156,61 @@ public class Reflection {
     }
 
     public static Field field(Class cls, String name) {
-        while (cls != null) {
-            for (Field tmp : cls.getDeclaredFields()) {
-                if (tmp.getName().equals(name)) {
-                    try {
-                        tmp.setAccessible(true);
-                        return tmp;
-                    } catch (Throwable t) {
-                        t.printStackTrace();
-                    }
-                }
-            }
-            cls = cls.getSuperclass();
+        if (cls == null || name == null) {
+            return null;
         }
-
-        return null;
-    }
-
-    public static Method method(Class cls, String name, Class... params) {
-        int argsLen = params == null ? 0 : params.length;
-        while (cls != null) {
-            for (Method tmp : cls.getDeclaredMethods()) {
-                if (tmp.getName().equals(name)) {
-                    Class[] paramTypes = tmp.getParameterTypes();
-                    int paramLen = paramTypes == null ? 0 : paramTypes.length;
-                    if (paramLen == argsLen) {
+        for (int attempt = 0; attempt < 2; attempt++) {
+            Class current = cls;
+            while (current != null) {
+                for (Field tmp : current.getDeclaredFields()) {
+                    if (tmp.getName().equals(name)) {
                         try {
                             tmp.setAccessible(true);
                             return tmp;
                         } catch (Throwable t) {
                             t.printStackTrace();
+                            return null;
                         }
-                        return null;
                     }
                 }
+                current = current.getSuperclass();
+            }
+            if (attempt != 0 || !ByPasser.restore()) {
+                break;
             }
         }
+        return null;
+    }
 
+    public static Method method(Class cls, String name, Class... params) {
+        if (cls == null || name == null) {
+            return null;
+        }
+        int argsLen = params == null ? 0 : params.length;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            Class current = cls;
+            while (current != null) {
+                for (Method tmp : current.getDeclaredMethods()) {
+                    if (tmp.getName().equals(name)) {
+                        Class[] paramTypes = tmp.getParameterTypes();
+                        int paramLen = paramTypes == null ? 0 : paramTypes.length;
+                        if (paramLen == argsLen) {
+                            try {
+                                tmp.setAccessible(true);
+                                return tmp;
+                            } catch (Throwable t) {
+                                t.printStackTrace();
+                            }
+                            return null;
+                        }
+                    }
+                }
+                current = current.getSuperclass();
+            }
+            if (attempt != 0 || !ByPasser.restore()) {
+                break;
+            }
+        }
         return null;
     }
 }

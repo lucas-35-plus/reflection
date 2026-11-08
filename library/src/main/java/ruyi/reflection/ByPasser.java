@@ -97,7 +97,10 @@ class ByPasser {
     //*************************************************************************
     // VMRuntime setHiddenApiExemptions ByPass All Hidden Api
     //*************************************************************************
-    static boolean bypass(int sdkInt, String... methodNames) {
+    private static Method sSetHiddenApiExemptions;
+    private static String[] sExemptions;
+
+    static synchronized boolean bypass(int sdkInt, String... methodNames) {
         // >= Android P Need to ByPass HiddenApi
         // < Android P No HiddenApi Limit
         // MethodHandles add in android 26
@@ -109,10 +112,34 @@ class ByPasser {
                 return false;
             }
 
-            methodNames = methodNames == null ? new String[]{""} : methodNames;
-            invoke(vm.getClass(), vm, "setHiddenApiExemptions", (Object) methodNames);
+            if (sSetHiddenApiExemptions == null) {
+                sSetHiddenApiExemptions = findMethod(vm.getClass(), "setHiddenApiExemptions");
+            }
+            String[] exemptions = methodNames == null ? new String[]{""} : methodNames.clone();
+            if (!applyExemptions(exemptions)) {
+                return false;
+            }
+            sExemptions = exemptions;
         }
         return true;
+    }
+
+    // 其他代码可能覆盖进程的豁免列表；仅恢复调用方明确设置过的范围。
+    static synchronized boolean restore() {
+        return sExemptions != null && applyExemptions(sExemptions);
+    }
+
+    private static boolean applyExemptions(String[] exemptions) {
+        if (vmRuntime == null || sSetHiddenApiExemptions == null) {
+            return false;
+        }
+        try {
+            sSetHiddenApiExemptions.invoke(vmRuntime, (Object) exemptions);
+            return true;
+        } catch (Throwable t) {
+            t.printStackTrace();
+            return false;
+        }
     }
 
     private static Object vmRuntime;
@@ -123,7 +150,10 @@ class ByPasser {
         }
         try {
             Class classVMRuntime = Class.forName("dalvik.system.VMRuntime");
-            vmRuntime = invoke(classVMRuntime, null, "getRuntime");
+            Method method = findMethod(classVMRuntime, "getRuntime");
+            if (method != null) {
+                vmRuntime = method.invoke(null);
+            }
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -131,7 +161,7 @@ class ByPasser {
         return vmRuntime;
     }
 
-    private static Object invoke(Class clazz, Object target, String name, Object... args) {
+    private static Method findMethod(Class clazz, String name) {
         Unsafe unsafe = ByPasser.getUnsafe();
         if (unsafe == null || sMethodsOffset <= 0) {
             return null;
@@ -157,7 +187,7 @@ class ByPasser {
                         Method method = (Method) member;
                         method.setAccessible(true);
                         if (method.getName().equals(name)) {
-                            return method.invoke(target, args);
+                            return method;
                         }
                     }
                 } catch (Throwable t) {
